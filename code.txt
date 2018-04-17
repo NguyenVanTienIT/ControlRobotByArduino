@@ -1,0 +1,274 @@
+﻿#include <AFMotor.h>
+#include <SoftwareSerial.h>
+#include <SerialCommand.h>
+#include "DHT.h"
+SoftwareSerial wifiSerial(2, 13);
+char ledStatus = 0;
+AF_DCMotor motor1(1, MOTOR12_64KHZ);
+AF_DCMotor motor2(2, MOTOR12_64KHZ);
+AF_DCMotor motor3(3, MOTOR12_64KHZ);
+AF_DCMotor motor4(4, MOTOR12_64KHZ);
+int flag = 1;
+byte timeOut = 30;            
+ 
+const int DHTPIN = 9;       //Đọc dữ liệu từ DHT11 ở chân 2 trên mạch Arduino
+const int DHTTYPE = DHT11;  //Khai báo loại cảm biến, có 2 loại là DHT11 và DHT22
+ 
+DHT dht(DHTPIN, DHTTYPE);
+
+
+String tmpWiFiData = "";
+
+byte currentDirection = 4;
+
+const byte DIRECTION_FORWARD = 0;
+const byte DIRECTION_BACKWARD = 1;
+const byte DIRECTION_TURNLEFT = 3;
+const byte DIRECTION_TURNRIGHT = 2;
+const byte DIRECTION_NONE = 4;
+void setup() {
+  // put your setup code here, to run once:
+  Serial.begin(9600);
+  wifiSerial.begin(9600);
+
+  Serial.println("Starting...");
+  //setupMotor();
+ 
+  showWiFiSerialData();
+  //delay(5000);
+  doWiFiConnect();
+  openNetworkPort("100");  //sendATAndGetResponse("AT+CIPSERVER=1,100", 1000);
+  dht.begin();
+}
+/*void setupMotor(){
+  setMotorSpeed(255);
+}*/
+void loop() {
+  // put your main code here, to run repeatedly:
+  //wifiSerial.listen();
+  tmpWiFiData = "";
+  char temp[31];
+  while (wifiSerial.available() > 0)
+  {
+    char c = wifiSerial.read();
+    tmpWiFiData += c;
+  }
+
+  if (tmpWiFiData.length() > 0)
+  {
+    tmpWiFiData.trim();
+    
+    //Serial.println(tmpWiFiData);
+    tmpWiFiData.toCharArray(temp, 32);
+    
+    ledStatus = temp[22];
+    //Serial.println("trang thai -> "+ledStatus);    
+    showLED(ledStatus);
+  }
+
+  delay(300);
+  //delay(500);
+ 
+}
+
+//motor tiến lên trước
+void motorForward(){
+  motor1.setSpeed(128);
+  motor2.setSpeed(128);
+  motor3.setSpeed(128);
+  motor4.setSpeed(128);
+  
+  motor1.run(FORWARD);
+  motor2.run(FORWARD);
+  motor3.run(FORWARD);
+  motor4.run(FORWARD);
+  flag = 1;
+}
+//motor  lùi sau
+void motorBackward(){
+  motor1.setSpeed(128);
+  motor2.setSpeed(128);
+  motor3.setSpeed(128);
+  motor4.setSpeed(128);
+
+  
+  motor1.run(BACKWARD);
+  motor2.run(BACKWARD);
+  motor3.run(BACKWARD);
+  motor4.run(BACKWARD);
+  flag = 0;
+}
+//motor rẽ trái
+void motorTurnLeft(){
+  if(flag == 1){
+    motor1.setSpeed(128);
+    motor2.setSpeed(32);
+    motor3.setSpeed(32);
+    motor4.setSpeed(128);
+    
+    motor1.run(FORWARD);
+    motor2.run(FORWARD);
+    motor3.run(FORWARD);
+    motor4.run(FORWARD);
+  
+  }
+  else{
+    motor1.setSpeed(128);
+    motor2.setSpeed(32);
+    motor3.setSpeed(32);
+    motor4.setSpeed(128);
+    
+    motor1.run(BACKWARD);
+    motor2.run(BACKWARD);
+    motor3.run(BACKWARD);
+    motor4.run(BACKWARD);
+  }
+}
+
+//motor rẽ phải
+void motorTurnRight(){
+ if(flag == 1){
+    motor1.setSpeed(32);
+    motor2.setSpeed(128);
+    motor3.setSpeed(128);
+    motor4.setSpeed(32);
+    
+    motor1.run(FORWARD);
+    motor2.run(FORWARD);
+    motor3.run(FORWARD);
+    motor4.run(FORWARD);
+  
+  }
+  else{
+   motor1.setSpeed(32);
+    motor2.setSpeed(128);
+    motor3.setSpeed(128);
+    motor4.setSpeed(32);
+    
+    motor1.run(BACKWARD);
+    motor2.run(BACKWARD);
+    motor3.run(BACKWARD);
+    motor4.run(BACKWARD);
+  }
+}
+// dừng motor
+void motorStop(){
+  motor1.run(RELEASE);
+  motor2.run(RELEASE);
+  motor3.run(RELEASE);
+  motor4.run(RELEASE);
+}
+void showLED(char led)
+{
+  switch (led) 
+  {
+    case '0' :
+    {
+      Serial.println("Xe da dung lai"); 
+      motorStop();
+      break;  
+    }
+    case '1' :
+    {
+      Serial.println("Xe dang tien len");
+      motorForward();
+      break;
+    }
+    case '2' : 
+    {
+      Serial.println("Xe dang re trai");
+      motorTurnLeft();
+      break;
+    }
+    case '3' :
+    {
+      Serial.println("Xe dang re phai"); 
+      motorTurnRight();
+      break;
+    }
+    case '4': 
+    {
+      Serial.println("Xe dang lui xuong");
+      motorBackward();
+      break;
+    }
+    case '5' :
+    {
+     //float h = dht.readHumidity();    //Đọc độ ẩm
+     //float t = dht.readTemperature(); //Đọc nhiệt độ
+      Serial.println("Gui du lieu cho server"); 
+      String msg = "xinchao";
+      sendMessenge(msg);
+ 
+      //Serial.print("Nhiet do: ");
+      //Serial.println(t);               //Xuất nhiệt độ
+      //Serial.print("Do am: ");
+      //Serial.println(h);               //Xuất độ ẩm
+  
+      //Serial.println();                //Xuống hàng
+     // delay(1000);                     //Đợi 1 giây
+      break; 
+    }
+    default :
+      break;
+}
+}
+
+void doWiFiConnect()
+{
+  sendATAndGetResponse("AT+CWMODE=1", 3000);
+  sendATAndGetResponse("AT+CWJAP=\"Xom Tro 47\",\"mothaiba\"", 5000);
+  sendATAndGetResponse("AT+CIFSR", 1000);   // xem đia chi IP
+  sendATAndGetResponse("AT+CIPMUX=1", 1000);  //
+}
+
+void openNetworkPort(String portStr)
+{
+  sendATAndGetResponse("AT+CIPSERVER=1," + portStr, 1000);
+}
+
+void sendATAndGetResponse(String ATCommand, int waitMS)
+{
+  tmpWiFiData = "";
+  wifiSerial.println(ATCommand);
+  delay(waitMS);
+  showWiFiSerialData();
+}
+
+void showWiFiSerialData()
+{
+  while (wifiSerial.available() > 0)
+  {
+    char c = wifiSerial.read();
+    tmpWiFiData += c;
+  }
+  Serial.println(tmpWiFiData);
+}
+
+String sendData(String command, const int timeout, boolean debug)
+{
+    String response = "";
+    Serial.println(command);
+    long int time = millis();
+    
+    while( (time+timeout) > millis()){
+      while(Serial.available()){
+        char c = Serial.read();
+        response+=c;
+      }  
+    }
+    
+    if(debug){  // co muon debug ko  neu co
+      Serial.print(response);
+    }
+    return response;
+}
+void sendMessenge(String messenge){
+  String cipSend = "AT+CIPSEND=0,";
+  cipSend += messenge.length();
+  Serial.println(messenge);
+  sendATAndGetResponse(cipSend,1000);
+  sendATAndGetResponse(messenge,1000);
+ // sendData(cipSend,timeOut,false);
+ // sendData(messenge, timeOut, false);
+}
